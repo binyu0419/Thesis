@@ -1,0 +1,931 @@
+---
+title: "thesis"
+author: "Bin Yu"
+date: "2025-02-01"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load the data and cleaning
+
+```{r}
+rm(list = ls())
+
+```
+
+```{r}
+library(frequency)
+library(descr)
+library(ggplot2)
+load("/Users/yubin/Desktop/Thesis/WTC_COVID-selected/data/merged_main_2024-12-21.RData")
+```
+
+```{r}
+d <- dd
+rm(dd)
+freq(d$Categorization)
+## cleaning / recoding
+# 99 (NA): missing or unable to categorize
+# 0: asymptimatic
+# 1: mild
+# 2: moderate
+# 3: severe
+d$severity = 99
+d$severity[d$Categorization=='Asymptomatic']=0
+d$severity[d$Categorization=='asymptomatic']=0
+d$severity[d$Categorization=='mild']=1
+d$severity[d$Categorization=='Mild']=1
+d$severity[d$Categorization=='moderate']=2
+d$severity[d$Categorization=='Moderate']=2
+d$severity[d$Categorization=='severe']=3
+d$severity[d$Categorization=='Severe']=3
+d$severity[d$Categorization=='SEVERE']=3
+d$severity[d$severity==99] = NA
+# new variable for severity
+freq(d$severity)
+
+```
+
+```{r}
+# 2 severity categories: asymptomatic/mild vs moderate/severe
+## this is the main outcome variable
+d$severity2mid=NA
+d$severity2mid[d$severity<2]=0
+d$severity2mid[d$severity>=2]=1
+freq(d$severity2mid)
+d$severity2mid = as.factor(d$severity2mid)
+```
+
+```{r}
+## Long COVID 
+freq(d$Any.residual.lingering.symptoms.due.to.previous.infection.)
+
+# detailed variable
+d$pacs = 99 # unknown
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='No']=0
+
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='Less than 4 weeks']=1
+
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='1-2 months']=2
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='1-2 Months']=2
+
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='2-6 Months']=3
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='2-6 months']=3
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='2- 6 months']=3
+
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='6-12 months']=4
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='6-12 Months']=4
+
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='Greater than 1 year']=5
+
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='Greater than 2 years']=6
+
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='Greater than 3 years']=7
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='Greater than 4 years']=7
+
+d$pacs[d$Any.residual.lingering.symptoms.due.to.previous.infection.=='Yes']=8
+
+freq(d$pacs)
+
+d$pacs = as.factor(d$pacs)
+```
+
+```{r}
+# [THIS] binary: long COVID is >2 months, "yes" is "yes" (current definition is 3 months)
+d$pacs_bin2m = 1
+d$pacs_bin2m[d$pacs==0]=0
+d$pacs_bin2m[d$pacs==1]=0
+d$pacs_bin2m[d$pacs==2]=0
+d$pacs_bin2m[d$pacs==99]=NA
+```
+
+```{r}
+freq(d$pacs_bin2m)
+```
+
+```{r}
+
+#####                           WTC exposures                              #####
+# *****************************************************************************#
+
+
+### Aggregate exposure (multi-level) 
+# **************************************
+
+### 4 categories of exposure: from lowest to highest
+freq(d$exp4)
+freq(d$exp4_imputed)
+freq(d$Exp4_Imputed)# use imputed
+#  cleaning / recoding" 0 = low; 1 = intermediate; 2 = high; 3 = very high
+d$exp4_clean = d$exp4_imputed
+freq(d$exp4_clean)
+# make factor variables be factors
+d$exp4_clean = as.factor(d$exp4_clean)
+
+
+
+# exp4_binary: merge 0/1 and 2/3
+d$exp4_binary = NA
+d$exp4_binary[d$exp4_clean==0]=0
+d$exp4_binary[d$exp4_clean==1]=0
+d$exp4_binary[d$exp4_clean==2]=1
+d$exp4_binary[d$exp4_clean==3]=1
+freq(d$exp4_binary)
+
+
+
+
+# exp4_3level: merge 2/3 (high and very high)
+## this is the main variable in the analysis 
+d$exp4_3level = NA
+d$exp4_3level[d$exp4_clean==0]=0
+d$exp4_3level[d$exp4_clean==1]=1
+d$exp4_3level[d$exp4_clean==2]=2
+d$exp4_3level[d$exp4_clean==3]=2
+freq(d$exp4_3level)
+# make factor variables be factors
+d$exp4_3level = as.factor(d$exp4_3level)
+
+
+
+# exp4_exclude: exclude 3 (very high)
+d$exp4_exclude = d$exp4_clean
+d$exp4_exclude[d$exp4_clean==3]=NA
+freq(d$exp4_exclude)
+d$exp4_exclude = as.factor(d$exp4_exclude)
+
+
+
+### Exp5: N=74 re-classified from 'missing' to '1.5' level: doesn't add much
+freq(d$Exp5_Imputed)
+
+```
+
+```{r}
+
+### Arrival time
+# **************************************
+
+### timing of arrival to sites: category: 1 = Sep 11, 2 = Sep 12-13, 3 = Sep 14-30, 4 = Oct 1 and beyond ##
+freq(d$arrival)
+d$wtc.arrive = d$arrival-1
+d$wtc.arrive = as.factor(d$wtc.arrive)
+freq(d$wtc.arrive)
+
+# 3 levels: merge Sep 12-13 and Sept 14-30 in one category
+d$wtc.arrive3 = NA
+d$wtc.arrive3[d$arrival==1] = 0
+d$wtc.arrive3[d$arrival==2] = 1
+d$wtc.arrive3[d$arrival==3] = 1
+d$wtc.arrive3[d$arrival==4] = 2
+d$wtc.arrive3 = as.factor(d$wtc.arrive3)
+freq(d$wtc.arrive3)
+
+# 2 levels: Sep 11 and after Sep 11
+d$wtc.arrive2 = NA
+d$wtc.arrive2[d$arrival==1] = 0
+d$wtc.arrive2[d$arrival==2] = 1
+d$wtc.arrive2[d$arrival==3] = 1
+d$wtc.arrive2[d$arrival==4] = 1
+freq(d$wtc.arrive2)
+d$wtc.arrive2=as.factor(d$wtc.arrive2)
+
+
+# arrival and dust: aggregate
+# category: 1 = Sep 11 in the dust cloud, 2 = Sep 11 not in the dust cloud, 
+# 3 = Sep 12-13, 4 = Sep 14-30, 5 = Oct 1 and beyond
+freq(d$ArrivalDust)
+# freq(d$ArrivalDust2020): adds category 1.5, not needed
+
+d$wtc.arrive.dust3 = NA
+d$wtc.arrive.dust3[d$ArrivalDust==1] = 0
+d$wtc.arrive.dust3[d$ArrivalDust==2] = 1
+d$wtc.arrive.dust3[d$ArrivalDust==3] = 2
+d$wtc.arrive.dust3[d$ArrivalDust==4] = 2
+d$wtc.arrive.dust3[d$ArrivalDust==5] = 3
+d$wtc.arrive.dust3 = as.factor(d$wtc.arrive.dust3)
+freq(d$wtc.arrive.dust3)
+```
+
+```{r}
+### DUST
+# **************************************
+
+# First exposure to the WTC site or rescue/recovery effort whether or not to work/volunteer: 
+# category: 1 = Sep 11 in the dust cloud, 1.5 = Sep 11 unknown dust cloud, 
+# 2 = Sep 11 not in the dust cloud, 3 = Sep 12-13, 4 = Sep 14-30, 5 = Oct 1 and beyond
+freq(d$dustfirstexposure)
+d$dustfirstexposure.f = d$dustfirstexposure-1
+d$dustfirstexposure.f = as.factor(d$dustfirstexposure.f)
+freq(d$dustfirstexposure.f)
+
+
+
+# caught-up in the DUST cloud from the collapse of the World Trade Center buildings
+freq(d$dustc)
+d$dust = d$dustc
+d$dust = as.factor(d$dust)
+d$dust[d$EAQ_08_04==0]=1
+freq(d$dust)
+
+
+# Worst exposure to dust: 
+## 0 = Directly in the cloud of dust from the collapse of the World Trade Center buildings
+## 1 = Exposed to significant amounts of dust but not directly in the cloud of dust from the collapse of the World Trade Center buildings
+## 2 = Exposed to some dust but not in the cloud of dust from the collapse of the World Trade Center buildings
+## 3 = Not exposed to dust and not in the cloud of dust from the collapse of the World Trade Center buildings
+## 4 = Don't know
+table(d$EAQ_08_04, useNA = 'ifany')
+table(d$EAQ_08_04, d$dustc, useNA='ifany')
+
+
+# Alternative measure of dust cloud exposure: binary
+## 1 = In the dust cloud from buildings collapse OR exposed to significant amounts of dust, but not from buildings collapse
+## 0 = Exposed to some dust or not exposed to dust
+d$dust_alt = d$dust
+d$dust_alt[d$EAQ_08_04==0]=1
+d$dust_alt[d$EAQ_08_04==1]=1
+freq(d$dust_alt)
+
+table(d$dustc, d$dust_alt, useNA='ifany')
+
+
+# Alternative measure of dust cloud exposure: 4 categories (doesn't improve compared to dust_alt)
+d$dust_alt4 = 0 # 0 = not exposed to dust
+d$dust_alt4[d$dust==1]=1
+d$dust_alt4[d$EAQ_08_04==0]=1 # Directly in the cloud of dust from the collapse of the World Trade Center buildings
+d$dust_alt4[d$EAQ_08_04==1]=2 # Exposed to significant amounts of dust but not directly in the cloud of dust from the collapse of the World Trade Center buildings
+d$dust_alt4[d$EAQ_08_04==2]=3 # Exposed to some dust but not in the cloud of dust from the collapse of the World Trade Center buildings
+
+d$dust_alt4 = as.factor(d$dust_alt4)
+freq(d$dust_alt4)
+
+```
+
+```{r}
+
+### PILE
+# **************************************
+# ever pile
+freq(d$everpile)
+d$everpile = as.factor(d$everpile)
+
+# pile September
+freq(d$pilesept)
+d$pilesept = as.factor(d$pilesept)
+
+```
+
+```{r}
+
+
+### DURATION of work in the response efforts
+# **************************************
+freq(d$wks11)
+descr(d$wks11)
+hist(d$wks11, breaks=30)
+# categorize wks11
+d$wks11_cat = NA
+d$wks11_cat[d$wks11==0]=0
+d$wks11_cat[d$wks11>0 & d$wks11<5]=1
+d$wks11_cat[d$wks11>=5 & d$wks11<11]=2
+d$wks11_cat[d$wks11>=11]=3
+d$wks11_cat = as.factor(d$wks11_cat)
+freq(d$wks11_cat)
+
+```
+
+```{r}
+
+## INJURY
+# **************************************
+freq(d$any_wtc_injur)
+d$injur = 0
+d$injur[d$any_wtc_injur==1]=1
+freq(d$injur)
+d$injur = as.factor(d$injur)
+
+# injuries to specific organs: skip, too sparse
+freq(d$wtc_injur_head)
+freq(d$wtc_injur_internal)
+freq(d$wtc_injur_25_50)
+freq(d$wtc_injur_mt50)
+
+
+
+### traditional (0) (fire, police, emergency) vs 
+# non-traditional (1) responders (construction workers, news reporters, doctors, etc)
+# **************************************
+freq(d$ntrad)
+d$ntrad = as.factor(d$ntrad)
+
+
+```
+
+```{r}
+
+
+#####                              Demographics                            #####
+# *****************************************************************************#
+
+
+### Education
+freq(d$Education)
+
+d$edu = 99 
+d$edu[d$Education=="Grad/Professional School"] = 0
+d$edu[d$Education=="BA/BS Degree"] = 0
+d$edu[d$Education=="Associate Degree"] = 0
+
+d$edu[d$Education=="Some College"] = 1
+d$edu[d$Education=="Professional School"] = 1 
+d$edu[d$Education=="Technical School"] = 1         
+
+d$edu[d$Education=="High School Grad"] = 2
+
+d$edu[d$Education=="Some High School"] = 3     
+d$edu[d$Education=="Elem School"]=3
+
+d$edu = as.factor(d$edu)
+freq(d$edu)
+
+
+### Employment: most recent before Mar 1 2020
+# Many of these records are very old (10 years before 2020)
+freq(d$WorkStatus.x)
+
+d$empl=99
+d$empl[d$WorkStatus.x=='1 = Working: Full-Time']=0
+d$empl[d$WorkStatus.x=='105 = Sporadic/Seasonal/As Needed']=0
+d$empl[d$WorkStatus.x=='106 = Volunteer']=0
+d$empl[d$WorkStatus.x=='2 = Working: Part-Time']=0
+d$empl[d$WorkStatus.x=='3 = Working: Unknown Amount']=0
+
+
+d$empl[d$WorkStatus.x=='14 = Disabled/Medical Leave: Unknown WTC Relationship, Unknown Work Relationship']=1
+d$empl[d$WorkStatus.x=='15 = Disabled/Medical Leave: Unknown WTC Relationship, Work-Related']=1
+d$empl[d$WorkStatus.x=='4 = Disabled/Medical Leave: WTC-Related, Any Work Relationship']=1
+d$empl[d$WorkStatus.x=='5 = Disabled/Medical Leave: Non-WTC-Related, Unknown Work Relationship']=1
+d$empl[d$WorkStatus.x=='6 = Disabled/Medical Leave: Non-WTC-Related, Work-Related']=1
+d$empl[d$WorkStatus.x=='7 = Disabled/Medical Leave: Non-WTC-Related, Non-Work-Related']=1
+d$empl[d$WorkStatus.x=='8 = Retired']=1
+d$empl[d$WorkStatus.x=='9 = Unemployed']=1
+
+d$empl = as.factor(d$empl)
+freq(d$empl)
+
+# depreesion and illness
+### Recode MHSQ_14_23 and MHSQ_16_21 to depression and illness, respectively
+d$depression <- ifelse(is.na(d$MHSQ_14_23), 99, d$MHSQ_14_23)
+d$illness <- ifelse(is.na(d$MHSQ_16_21), 99, d$MHSQ_16_21)
+d$depression <- ifelse(d$depression %in% c(1,2,3), 1, d$depression)
+# Check frequencies for the recoded variables
+freq(d$depression)
+freq(d$illness)
+```
+
+```{r}
+### Recode Race to a binary variable: 0 for White, 1 for Nonwhite
+d$race_binary <- ifelse(d$Race == "White", 0, 1)
+# Check frequencies for the new binary race variable
+freq(d$race_binary)
+```
+
+
+```{r}
+d$OAD <- ifelse(!is.na(d$cert_OAD) & d$cert_OAD == "OAD", 1, 0)
+```
+
+```{r}
+library(tableone)
+vars <- c("OAD", "severity2mid", "pacs_bin2m", "age911", "edu", "empl",
+          "Race", "Sex", "dust_alt", "wtc.arrive.dust3", "wks11_cat")
+
+factorVars <- c("edu", "empl", "Race", "Sex", "dust_alt", "wtc.arrive.dust3", "wks11_cat", 
+                "OAD", "severity2mid", "pacs_bin2m")
+
+table1 <- CreateTableOne(vars = vars, 
+                         strata = "exp4_binary", 
+                         data = d, 
+                         factorVars = factorVars)
+
+print(table1, showAllLevels = TRUE)
+
+```
+
+```{r}
+
+library(naniar)
+
+d$empl <- addNA(d$empl)
+d$edu <- addNA(d$edu)
+
+empl_dummies <- model.matrix(~ empl - 1, data = d)
+edu_dummies <- model.matrix(~ edu - 1, data = d)
+
+colnames(empl_dummies) <- paste0("empl_", levels(d$empl))
+colnames(edu_dummies)  <- paste0("edu_", levels(d$edu))
+
+d <- cbind(d, empl_dummies, edu_dummies)
+# Convert depression and illness to factors if they are not already
+d$depression <- as.factor(d$depression)
+d$illness    <- as.factor(d$illness)
+
+# Create dummy variables for depression and illness
+depression_dummies <- model.matrix(~ depression - 1, data = d)
+illness_dummies    <- model.matrix(~ illness - 1, data = d)
+
+# Rename columns for clarity
+colnames(depression_dummies) <- paste0("depression_", levels(d$depression))
+colnames(illness_dummies)    <- paste0("illness_", levels(d$illness))
+
+# Add the new dummy variables to the data frame
+d <- cbind(d, depression_dummies, illness_dummies)
+```
+
+
+After cleaning the data, show the table 1 again:
+
+```{r}
+library(tableone)
+d$BMI <- as.numeric(as.character(d$BMI))
+
+vars <- c("OAD", "severity2mid", "pacs_bin2m", "age911", "edu", "empl",
+          "Race", "ntrad","depression","illness", "Sex", "BMI")
+
+factorVars <- c("edu", "empl", "Race", "Sex", "OAD", "severity2mid", "pacs_bin2m","ntrad","depression","illness")
+
+d <- d[complete.cases(d[, c("exp4_binary", "OAD", "severity2mid", "pacs_bin2m", "age911", "edu", "empl", "Race", "Sex", "dust_alt", "wtc.arrive.dust3", "wks11_cat","ntrad", "BMI")]), ]
+
+table1 <- CreateTableOne(vars = vars, 
+                         strata = "exp4_binary", 
+                         data = d, 
+                         factorVars = factorVars)
+
+print(table1, showAllLevels = TRUE)
+```
+
+Traditional Model:
+
+```{r}
+library(lavaan)
+# Models 
+#   - exp4_binary as exposure
+#   - OAD as the first mediator
+#   - severity2mid as the second mediator
+#   - pacs_bin2m as the results
+#   - age911、edu、empl as the confounders
+model <- '
+  # mediation model 1: OAD predicted by exposure and confounders 
+  OAD ~ a1*exp4_binary + age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99
+
+  # mediation model 2: severity predicted by exposure, confounders and OAD (mediator 1)
+  severity2mid ~ a2*exp4_binary + b1*OAD + age911  + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99
+
+  # results: long covid predicted by exposure, mediators and confounders
+  pacs_bin2m ~ c_prime*exp4_binary + b2*OAD + b3*severity2mid + age911 + edu_1 + edu_2 + edu_3 + edu_99+ empl_1 + empl_99
+
+  # define the mediation effects
+  # chain effect：exp4_binary -> OAD -> severity2mid -> pacs_bin2m
+  ind_chain := a1 * b1 * b3
+
+  # indirect effect for exp4_binary to severity2mid 
+  ind_med2  := a2 * b3
+
+  # indirect effect of exp4_binary to OAD 
+  ind_med1  := a1 * b2
+
+  # Total indirect effect
+  total_ind := ind_chain + ind_med2 + ind_med1
+
+  # Total effect
+  total_effect := c_prime + total_ind
+'
+
+fit <- sem(model,
+           data = d,
+           ordered = c("exp4_binary", "OAD", "severity2mid", "pacs_bin2m"),
+           estimator = "WLSMV")
+
+summary(fit, standardized = TRUE, fit.measures = TRUE)
+```
+
+## Overview
+
+The results were obtained using the `lavaan` package with the DWLS estimator and NLMINB optimization. The model was fitted on 2228 observations after dropping NA in the exposure and outcomes. Overall, the model fit indices indicate a good fit (CFI = 1.000, TLI = 1.000, RMSEA = 0.000, SRMR = 0.000).
+
+## Model Specification
+
+The model is structured in three parts:
+
+1.  **Mediator Model for OAD:**\
+    $$
+    \text{logit}\,\Pr\{ \text{OAD} = 1 \mid X, C \} = a_0 + a_1\, X + \gamma_1^\top C,
+    $$ where $X$ (denoted as `exp4_bn`) is the exposure and $C$ represents covariates (age911, edu, empl, etc.). The estimate $a_1 = 0.286$ (p \< 0.001) indicates that a one-unit increase in $X$ increases the log-odds of OAD by 0.286.
+
+2.  **Mediator Model for Severity2mid:**\
+    $$
+    \text{logit}\,\Pr\{ \text{severity2mid} = 1 \mid X, \text{OAD}, C \} = b_0 + a_2\, X + b_1\, \text{OAD} + \gamma_2^\top C,
+    $$ where the effect of OAD on severity2mid is significant ($b_1 = 0.303$, p \< 0.001), while the direct effect of $X$ ($a_2 = 0.052$) is not significant.
+
+3.  **Outcome Model for pacs_bin2m:**\
+    $$
+    \text{logit}\,\Pr\{ Y = 1 \mid X, \text{OAD}, \text{severity2mid}, C \} = c_0 + c' X + b_2\, \text{OAD} + b_3\, \text{severity2mid} + \gamma_3^\top C.
+    $$ Here, the effect of severity2mid is strong and significant ($b_3 = 0.435$, p \< 0.001), while the direct effect of $X$ (denoted $c'$, estimated as 0.047) is not significant.
+
+## Effect Decomposition
+
+Defined parameters allow us to decompose the total effect of $X$ on $Y$ into indirect and direct components. In our chain mediation model, the chain indirect effect is given by the product: $$
+\text{ind\_chain} = a_1 \times b_1 \times b_3,
+$$ which is estimated as 0.038 (p \< 0.001).
+
+Additionally, we have:
+
+\- **ind_med1 (Indirect effect through OAD alone):** 0.017 (p = 0.138),
+
+\- **ind_med2 (Indirect effect through severity2mid alone):** 0.023 (p = 0.449),
+
+\- **Total Indirect Effect:** 0.077 (p = 0.017),
+
+\- **Total Effect:** 0.124 (p = 0.082).
+
+## Interpretation
+
+-   **Chain Indirect Effect:**\
+    The value of 0.038 indicates that there is a significant sequential (chain) mediation effect. This represents the effect of $X$ on $Y$ transmitted via OAD and then severity2mid: $$
+    \text{Chain Indirect Effect} = a_1 \times b_1 \times b_3 \approx 0.286 \times 0.303 \times 0.435 \approx 0.038.
+    $$
+
+-   **Natural Direct Effect (NDE):**\
+    The direct effect of $X$ on $Y$ (not transmitted through the mediators) is small and not significant ($c' \approx 0.047$, p = 0.502).
+
+-   **Total Effect:**\
+    The overall effect of $X$ on $Y$ is the sum of the direct and indirect effects, estimated as 0.124 (marginally non-significant, p = 0.082). The indirect pathway (combined mediation) plays a substantial role in transmitting the effect of $X$ on $Y$.
+
+## Conclusion
+
+The results support a chain mediation process in which the exposure $X$ influences the outcome $Y$ through its effect on OAD and subsequently on severity2mid. Although the natural direct effect is small, the significant chain indirect effect suggests that the sequential mediation pathway is an important mechanism in this model.
+
+---
+
+## Chain Mediation Analysis using the paths Package
+
+In this analysis, we assume the following causal chain:
+  
+\[
+\text{exp4\_binary} \longrightarrow \text{OAD} \longrightarrow \text{severity2mid} \longrightarrow \text{pacs\_bin2m}
+\]
+
+where  
+- **exp4_binary** is the exposure,  
+- **OAD** is the first mediator,  
+- **severity2mid** is the second mediator, and  
+- **pacs_bin2m** is the outcome.  
+
+Covariates include **age911**, **edu_1**, **edu_2**, **edu_3**, **edu_99**, **empl_1**, and **empl_99**.
+
+We will use GLMs to estimate the following models:
+
+1. **Mediator 1 Model (OAD):**
+\[
+\text{logit}\,\Pr\{\text{OAD}=1 \mid \text{exp4\_binary}, C\} = \alpha_0 + \alpha_1\,\text{exp4\_binary} + \gamma_1^\top C,
+\]
+where \( C \) denotes the covariates.
+
+2. **Mediator 2 Model (severity2mid):**
+\[
+\text{logit}\,\Pr\{\text{severity2mid}=1 \mid \text{exp4\_binary}, \text{OAD}, C\} = \beta_0 + \beta_1\,\text{exp4\_binary} + \beta_2\,\text{OAD} + \gamma_2^\top C.
+\]
+
+3. **Outcome Model (pacs\_bin2m):**
+\[
+\text{logit}\,\Pr\{Y=1 \mid \text{exp4\_binary}, \text{OAD}, \text{severity2mid}, C\} = \delta_0 + \delta_1\,\text{exp4\_binary} + \delta_2\,\text{OAD} + \delta_3\,\text{severity2mid} + \gamma_3^\top C.
+\]
+
+Additionally, we fit a propensity score model for the exposure:
+\[
+\text{logit}\,\Pr\{\text{exp4\_binary}=1 \mid C\} = \eta_0 + \eta^\top C.
+\]
+
+The following R code implements these steps using the **paths** package.
+
+```{r, message=FALSE, warning=FALSE}
+library(paths)
+
+# Define the mediators as a list of variable names (chain mediation with two mediators)
+mediators <- list("OAD", "severity2mid")
+# Define formulas for each GLM
+formula_m0 <- pacs_bin2m ~ exp4_binary + age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99 + ntrad + depression_1 + depression_99 + illness_1 + illness_99 + BMI
+# Mediator 1 model: OAD
+formula_m1 <- pacs_bin2m ~ exp4_binary + age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99 + ntrad + depression_1 + depression_99 + illness_1 + illness_99 + BMI + OAD
+
+# Mediator 2 model: severity2mid
+formula_m2 <- pacs_bin2m ~ exp4_binary + age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99 + ntrad + depression_1 + depression_99 + illness_1 + illness_99 + BMI + OAD + severity2mid
+# Propensity score model for the exposure
+formula_ps <- exp4_binary ~ age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99 + ntrad + depression_1 + depression_99 + illness_1 + illness_99 + BMI
+
+# Fit the GLMs
+glm_m0 <- glm(formula_m0, family = binomial("logit"), data = d)
+glm_m1 <- glm(formula_m1, family = binomial("logit"), data = d)
+glm_m2 <- glm(formula_m2, family = binomial("logit"), data = d)
+
+glm_ymodels <- list(glm_m0, glm_m1, glm_m2)
+
+# Fit the propensity score model
+glm_ps <- glm(formula_ps, family = binomial("logit"), data = d)
+
+# Run the causal paths analysis using the paths package.
+# The exposure is 'exp4_binary' and the outcome is 'pacs_bin2m'.
+# We use 1000 bootstrap replicates for inference.
+paths_glm <- paths(a = "exp4_binary", y = "pacs_bin2m", m = mediators,
+                   glm_ymodels, ps_model = glm_ps, data = d, nboot = 1000)
+
+# View a summary of the paths analysis results
+summary(paths_glm)
+
+# Optionally, plot sensitivity analyses if desired
+plot(paths_glm)
+```
+```{r}
+library(paths)
+
+# Define the mediators as a list of variable names (chain mediation with two mediators)
+mediators <- list("OAD")
+# Define formulas for each GLM
+formula_m0 <- severity2mid ~ exp4_binary + age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99
+# Mediator 1 model: OAD
+formula_m1 <- severity2mid ~ exp4_binary + age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99 + OAD
+
+# Propensity score model for the exposure
+formula_ps <- exp4_binary ~ age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99
+
+# Fit the GLMs
+glm_m0 <- glm(formula_m0, family = binomial("logit"), data = d)
+glm_m1 <- glm(formula_m1, family = binomial("logit"), data = d)
+
+glm_ymodels <- list(glm_m0, glm_m1)
+
+# Fit the propensity score model
+glm_ps <- glm(formula_ps, family = binomial("logit"), data = d)
+paths_glm <- paths(a = "exp4_binary", y = "severity2mid", m = mediators,
+                   glm_ymodels, ps_model = glm_ps, data = d, nboot = 1000)
+
+# View a summary of the paths analysis results
+summary(paths_glm)
+
+# Optionally, plot sensitivity analyses if desired
+plot(paths_glm)
+```
+```{r}
+# Define the mediators as a list of variable names (chain mediation with two mediators)
+mediators <- list("severity2mid")
+# Define formulas for each GLM
+formula_m0 <- pacs_bin2m ~ exp4_binary + age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99
+# Mediator 1 model: OAD
+formula_m1 <- pacs_bin2m ~ exp4_binary + age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99 + severity2mid
+
+# Propensity score model for the exposure
+formula_ps <- exp4_binary ~ age911 + edu_1 + edu_2 + edu_3 + edu_99 + empl_1 + empl_99
+
+# Fit the GLMs
+glm_m0 <- glm(formula_m0, family = binomial("logit"), data = d)
+glm_m1 <- glm(formula_m1, family = binomial("logit"), data = d)
+
+glm_ymodels <- list(glm_m0, glm_m1)
+
+# Fit the propensity score model
+glm_ps <- glm(formula_ps, family = binomial("logit"), data = d)
+
+# Run the causal paths analysis using the paths package.
+# The exposure is 'exp4_binary' and the outcome is 'pacs_bin2m'.
+# We use 1000 bootstrap replicates for inference.
+paths_glm <- paths(a = "exp4_binary", y = "pacs_bin2m", m = mediators,
+                   glm_ymodels, ps_model = glm_ps, data = d, nboot = 1000)
+
+# View a summary of the paths analysis results
+summary(paths_glm)
+
+# Optionally, plot sensitivity analyses if desired
+plot(paths_glm)
+```
+
+```{r}
+library(medflex)
+vars_needed <- c("pacs_bin2m", "exp4_binary", "OAD", "severity2mid", "age911", "edu", "empl")
+d_clean <- d[complete.cases(d[, vars_needed]), ]
+```
+
+## Chain Mediation Model Using medflex
+
+In this analysis, we examine a chain (sequential) mediation model where the exposure variable, **exp4_binary**, influences the outcome **pacs_bin2m** through two mediators in sequence: **OAD** (mediator 1) and **severity2mid** (mediator 2). In our theoretical model, the causal chain is assumed to be:
+
+$$
+X \longrightarrow M_1 \longrightarrow M_2 \longrightarrow Y,
+$$
+
+where\
+- $X$ is the exposure (exp4_binary),\
+- $M_1$ is the first mediator (OAD),\
+- $M_2$ is the second mediator (severity2mid),\
+- $Y$ is the outcome (pacs_bin2m),\
+- and $C$ represents the covariates (age911, edu, empl).
+
+### Data Expansion
+
+We begin by expanding the dataset using the `neImpute` function from the **medflex** package. The imputation model includes the exposure, the two mediators, their interaction term, and the covariates. The parameter `nMed = 2` indicates that the two variables immediately following the exposure in the formula (i.e., **OAD** and **severity2mid**) are treated as mediators. The imputation model is given by:
+
+$$
+\text{logit}\,\Pr\{Y = 1 \mid X, M_1, M_2, C\} = \alpha_0 + \alpha_1 X + \alpha_2 M_1 + \alpha_3 M_2 + \alpha_4 (M_1 \times M_2) + \gamma^\top C.
+$$
+
+This model allows the interaction between $M_1$ and $M_2$
+
+## Natural Effects Model for Chain Mediation
+
+After data expansion, the **medflex** package generates two counterfactual versions of the exposure: - **exp4_binary0** (denoted as $x^*$): the exposure under the control condition, - **exp4_binary1** (denoted as $x$): the exposure under the treatment condition.
+
+We then fit a natural effects model on the expanded dataset. In the **conditional model** (which adjusts for covariates), the model is specified as:
+
+$$
+\text{logit}\,\Pr\{Y(x, M(x^*))=1 \mid C\} = \beta_0 + \beta_1\, x^* + \beta_2\, x + \beta_3\, (x^* \times x) + \gamma^\top C,
+$$
+
+where:
+
+\- $x^*$ is the counterfactual exposure (corresponding to **exp4_binary0**),
+
+\- $x$ is the actual exposure (corresponding to **exp4_binary1**),
+
+\- $C$ represents the covariates (e.g., **age911**, **edu**, **empl**),
+
+\- $\beta_1$ captures the effect transmitted through the mediators (i.e., the joint or chain indirect effect),
+
+\- $\beta_2$ represents the natural direct effect (NDE) of the exposure on the outcome (i.e., the effect not transmitted through the mediators),
+
+\- $\beta_3$ accounts for any interaction between $x^*$ and $x$, and
+
+\- $\gamma$ is a vector of coefficients for the covariates.
+
+In this formulation, the **total effect (TE)** on the log-odds scale is approximately $\beta_1 + \beta_2$ (plus any contribution from the interaction term, if significant).
+
+For the **marginal model** (without adjusting for covariates), the specification is:
+
+$$
+\text{logit}\,\Pr\{Y(x, M(x^*))=1\} = \beta_0 + \beta_1\, x^* + \beta_2\, x + \beta_3\, (x^* \times x).
+$$
+
+### Effect Decomposition
+
+We further decompose the estimated effects using the `neEffdecomp` function.
+
+This decomposition yields:
+
+\- **Natural Direct Effect (NDE):** The effect of $X$ on $Y$ that is not mediated by the mediators $M_1$ and $M_2$.
+
+\- **Natural Indirect Effect (NIE):** The joint (chain) indirect effect, representing the effect transmitted sequentially through both mediators.
+
+\- **Total Effect (TE):** The overall effect of $X$ on $Y$, which is the sum of the natural direct and joint indirect effects.
+
+------------------------------------------------------------------------
+
+Below is the corresponding R code used to fit these models:
+
+```{r}
+
+# random seed 
+set.seed(23456)
+
+# Step 1: expand the data
+# except for confounders, we also include two mediators and their interaction term:
+impData <- neImpute(
+  pacs_bin2m ~ exp4_binary + OAD + severity2mid + OAD * severity2mid + age911 + edu + empl,
+  family = binomial("logit"),
+  nMed = 2,
+  data = d_clean
+)
+
+
+# Step 2a: Conditional Natural Effects
+
+neMod_joint_cond <- neModel(
+  pacs_bin2m ~ exp4_binary0 * exp4_binary1 + age911 + edu + empl,
+  family = binomial("logit"),
+  expData = impData)
+
+# results
+summary(neMod_joint_cond)
+
+# odds ratio:
+exp(cbind(coef(neMod_joint_cond), confint(neMod_joint_cond)))
+
+# Step 2b: Marginal Natural Effects
+
+neMod_joint_marg <- neModel(
+  pacs_bin2m ~ exp4_binary0 * exp4_binary1,
+  family = binomial("logit"),
+  expData = impData)
+
+# results
+summary(neMod_joint_marg)
+exp(cbind(coef(neMod_joint_marg), confint(neMod_joint_marg)))
+
+# Step 3a: decomposition of effects
+effdecomp_cond <- neEffdecomp(neMod_joint_cond)
+summary(effdecomp_cond)
+# odds ratio
+exp(coef(effdecomp_cond))
+
+# Step 3b: marginal effects
+effdecomp_marg <- neEffdecomp(neMod_joint_marg)
+summary(effdecomp_marg)
+exp(coef(effdecomp_marg))
+```
+
+Since the X-M interaction effect is not significant, try normal model:
+
+```{r}
+
+# expand the data
+impData <- neImpute(
+  pacs_bin2m ~ exp4_binary + OAD + severity2mid + OAD*severity2mid + age911 + edu + empl,
+  family = binomial("logit"),
+  nMed = 2,
+  data = d_clean
+)
+
+# fit the natural effect model
+neMod_joint <- neModel(
+  pacs_bin2m ~ exp4_binary0 + exp4_binary1 + age911 + edu + empl,
+  family = binomial("logit"),
+  expData = impData,
+  se = "bootstrap",
+  nboot = 1000  # 1000 times of bootstrap
+)
+summary(neMod_joint)
+
+# Optionally, convert the estimates to the odds ratio scale:
+exp(cbind(coef(neMod_joint), confint(neMod_joint)))
+# Step 2b: Marginal Natural Effects
+
+neMod_marg <- neModel(
+  pacs_bin2m ~ exp4_binary0 + exp4_binary1,
+  family = binomial("logit"),
+  expData = impData)
+
+# results
+summary(neMod_marg)
+exp(cbind(coef(neMod_marg), confint(neMod_marg)))
+
+# Step 3a: decomposition of effects
+effdecomp_cond <- neEffdecomp(neMod_joint)
+summary(effdecomp_cond)
+# odds ratio
+exp(coef(effdecomp_cond))
+
+# Step 3b: marginal effects
+effdecomp_marg <- neEffdecomp(neMod_marg)
+summary(effdecomp_marg)
+exp(coef(effdecomp_marg))
+
+
+
+```
+
+Also try to use mediation package to do the analysis ( not viable)
+
+```{r}
+library(mediation)
+
+d_clean$exp4_binary <- as.numeric(as.character(d_clean$exp4_binary))
+d_clean$severity2mid <- as.numeric(as.character(d_clean$severity2mid))
+
+fit_M1 <- glm(OAD ~ exp4_binary + age911 + edu + empl,
+              data = d_clean,
+              family = binomial("logit"))
+
+fit_M2 <- glm(severity2mid ~ exp4_binary + OAD + age911 + edu + empl,
+              data = d_clean,
+              family = binomial("logit"))
+
+# exp4_binary -> OAD
+med_out_M1 <- mediate(fit_M1, fit_M2,
+                      treat = "exp4_binary", mediator = "OAD",
+                      sims = 1000)
+summary(med_out_M1)
+
+# 
+fit_Y <- glm(pacs_bin2m ~ exp4_binary + OAD + severity2mid + age911 + edu + empl,
+             data = d_clean,
+             family = binomial("logit"))
+
+med_out_M2 <- mediate(fit_M2, fit_Y,
+                      treat = "exp4_binary", mediator = "severity2mid",
+                      sims = 1000)
+summary(med_out_M2)
+
+chain_ACME <- med_out_M1$d0 * med_out_M2$d0
+chain_ACME
+```
